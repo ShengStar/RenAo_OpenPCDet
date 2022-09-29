@@ -136,6 +136,12 @@ class DataProcessor(object):
 
         if not data_dict['use_lead_xyz']:
             voxels = voxels[..., 3:]  # remove xyz in voxels(N, 3)
+            
+        mask = num_points > 1
+        voxels = voxels[mask,:]
+        coordinates = coordinates[mask]
+        num_points = num_points[mask]
+
 
         data_dict['voxels'] = voxels
         data_dict['voxel_coords'] = coordinates
