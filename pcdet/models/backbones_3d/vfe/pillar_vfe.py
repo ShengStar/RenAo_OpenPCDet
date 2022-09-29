@@ -19,14 +19,23 @@ class PFNLayer(nn.Module):
             out_channels = out_channels // 2
 
         if self.use_norm:
-            self.linear = nn.Linear(in_channels, out_channels, bias=False)
-            self.norm = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
+            self.linear_1_3 = nn.Linear(in_channels, out_channels, bias=False)
+            self.norm_1_3 = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
+            self.linear_4_15 = nn.Linear(in_channels, out_channels, bias=False)
+            self.norm_4_15 = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
+            self.linear_16_32 = nn.Linear(in_channels, out_channels, bias=False)
+            self.norm_16_32 = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
+            # self.linear = nn.Linear(in_channels, out_channels, bias=False)
+            # self.norm = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
         else:
             self.linear = nn.Linear(in_channels, out_channels, bias=True)
 
         self.part = 50000
 
-    def forward(self, inputs):
+    def forward(self, inputs,num):
+        mask_1_3 = []
+        mask_4_15 = []
+        mask_16_32 = []
         if inputs.shape[0] > self.part:
             # nn.Linear performs randomly when batch size is too large
             num_parts = inputs.shape[0] // self.part
@@ -34,9 +43,32 @@ class PFNLayer(nn.Module):
                                for num_part in range(num_parts+1)]
             x = torch.cat(part_linear_out, dim=0)
         else:
-            x = self.linear(inputs)
+            # x = self.linear(inputs) # torch.Size([22470, 32, 10])
+            mask_1_3 = num < 4
+            mask_4_15 = ((num < 16) & (num >3) )
+            mask_16_32 = (num > 15)
+            x1 = self.linear_1_3(inputs[mask_1_3,:])
+            x2 = self.linear_4_15(inputs[mask_4_15,:])
+            x3 = self.linear_16_32(inputs[mask_16_32,:])
+            # print("！！！")
+            # print(inputs.shape)
+            # print(inputs[mask_1_3,:].shape)
+            # print(inputs[mask_4_15,:].shape)
+            # print(inputs[mask_16_32,:].shape)
+
+
         torch.backends.cudnn.enabled = False
-        x = self.norm(x.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        # x = self.norm(x.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        x1 = self.norm_1_3(x1.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        x2 = self.norm_4_15(x2.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        x3 = self.norm_16_32(x3.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        x = torch.zeros(inputs.shape[0],inputs.shape[1],64).to(device)
+        x[mask_1_3,:] = x1
+        x[mask_4_15,:] = x2
+        x[mask_16_32,:] = x3
+
+
         torch.backends.cudnn.enabled = True
         x = F.relu(x)
         x_max = torch.max(x, dim=1, keepdim=True)[0]
@@ -117,7 +149,7 @@ class PillarVFE(VFETemplate):
         mask = torch.unsqueeze(mask, -1).type_as(voxel_features)
         features *= mask
         for pfn in self.pfn_layers:
-            features = pfn(features)
+            features = pfn(features,voxel_num_points)
         features = features.squeeze()
         batch_dict['pillar_features'] = features
         return batch_dict
