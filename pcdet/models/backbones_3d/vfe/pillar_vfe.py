@@ -19,8 +19,13 @@ class PFNLayer(nn.Module):
             out_channels = out_channels // 2
 
         if self.use_norm:
-            self.linear_1_3 = nn.Linear(in_channels, out_channels, bias=False)
-            self.norm_1_3 = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
+            self.linear_1 = nn.Linear(in_channels, out_channels, bias=False)
+            self.norm_1 = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
+            self.linear_2 = nn.Linear(in_channels, out_channels, bias=False)
+            self.norm_2 = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
+            self.linear_3 = nn.Linear(in_channels, out_channels, bias=False)
+            self.norm_3 = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
+
             self.linear_4_15 = nn.Linear(in_channels, out_channels, bias=False)
             self.norm_4_15 = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.01)
             self.linear_16_32 = nn.Linear(in_channels, out_channels, bias=False)
@@ -44,12 +49,17 @@ class PFNLayer(nn.Module):
             x = torch.cat(part_linear_out, dim=0)
         else:
             # x = self.linear(inputs) # torch.Size([22470, 32, 10])
-            mask_1_3 = num < 4
+            mask_1 = num < 2
+            mask_2 = ((num < 3) & (num >1) )
+            mask_3 = ((num < 4) & (num >2) )
             mask_4_15 = ((num < 16) & (num >3) )
             mask_16_32 = (num > 15)
-            x1 = self.linear_1_3(inputs[mask_1_3,:])
-            x2 = self.linear_4_15(inputs[mask_4_15,:])
-            x3 = self.linear_16_32(inputs[mask_16_32,:])
+            x1 = self.linear_1(inputs[mask_1,:])
+            x2 = self.linear_2(inputs[mask_2,:])
+            x3 = self.linear_3(inputs[mask_3,:])
+
+            x4 = self.linear_4_15(inputs[mask_4_15,:])
+            x5 = self.linear_16_32(inputs[mask_16_32,:])
             # print("！！！")
             # print(inputs.shape)
             # print(inputs[mask_1_3,:].shape)
@@ -59,14 +69,26 @@ class PFNLayer(nn.Module):
 
         torch.backends.cudnn.enabled = False
         # x = self.norm(x.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
-        x1 = self.norm_1_3(x1.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
-        x2 = self.norm_4_15(x2.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
-        x3 = self.norm_16_32(x3.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        x1 = self.norm_1(x1.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        x2 = self.norm_2(x2.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        x3 = self.norm_3(x3.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        x4 = self.norm_4_15(x4.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+        x5 = self.norm_16_32(x5.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         x = torch.zeros(inputs.shape[0],inputs.shape[1],64).to(device)
-        x[mask_1_3,:] = x1
-        x[mask_4_15,:] = x2
-        x[mask_16_32,:] = x3
+        # print("!!!!!!!!!")
+        # print(x.shape)
+        # print(x1.shape)
+        # print(x2.shape)
+        # print(x3.shape)
+        # print(x4.shape)
+        # print(x5.shape)
+        x[mask_1,:] = x1
+        x[mask_2,:] = x2
+        x[mask_3,:] = x3
+        x[mask_4_15,:] = x4
+        x[mask_16_32,:] = x5
 
 
         torch.backends.cudnn.enabled = True
